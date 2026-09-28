@@ -18,7 +18,7 @@ import datetime
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = []
+PLATFORMS: list[Platform] = [Platform.SWITCH]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -34,8 +34,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     manager = TimelapseManager(hass, config)
     hass.data[DOMAIN][entry.entry_id] = manager
-
-    await manager.start()
 
     async def hourly_maintenance(now):
         await manager.check_and_generate_backlog()
@@ -65,11 +63,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.info("Unloading Hassio Timelapse entry: %s", entry.title)
 
-    if manager := hass.data[DOMAIN].get(entry.entry_id):
+    # Unload entities first so RestoreEntity stores the pre-unload on/off state.
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+
+    if manager := hass.data[DOMAIN].pop(entry.entry_id, None):
         await manager.stop()
-        hass.data[DOMAIN].pop(entry.entry_id)
-
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        pass
-
-    return unload_ok
+    return True

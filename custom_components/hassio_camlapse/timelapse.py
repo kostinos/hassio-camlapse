@@ -59,8 +59,15 @@ class TimelapseManager:
             hass, self.snapshot_service, self.video_service, self.image_retention_days, self.video_retention_days
         )
 
-    async def start(self):
-        """Start the periodic snapshot task."""
+    @property
+    def is_recording(self) -> bool:
+        """Return whether a snapshot timer is active."""
+        return self._remove_timer is not None
+
+    async def start(self) -> None:
+        """Start the periodic snapshot task once, even after repeated service calls."""
+        if self.is_recording:
+            return
         self._remove_timer = async_track_time_interval(
             self.hass,
             self._async_take_snapshot_wrapper,
@@ -68,16 +75,17 @@ class TimelapseManager:
         )
         _LOGGER.info(f"Started timelapse snapshots for {self.camera_entity_id} every {self.interval}s")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the periodic snapshot task."""
         if self._remove_timer:
             self._remove_timer()
             self._remove_timer = None
             _LOGGER.info("Stopped timelapse snapshots")
 
-    async def _async_take_snapshot_wrapper(self, now):
-        """Wrapper to call async_take_snapshot."""
-        await self.async_take_snapshot()
+    async def _async_take_snapshot_wrapper(self, now: datetime.datetime) -> None:
+        """Ignore timer callbacks that were queued before the switch was turned off."""
+        if self.is_recording:
+            await self.async_take_snapshot()
 
     async def async_take_snapshot(self):
         """Take a snapshot and save it."""

@@ -15,6 +15,8 @@ The project follows a service-oriented architecture layout within the component:
 
 - `timelapse.py`: **Coordinator**. Manages simple state and orchestrates calls to services. Does NOT contain business logic.
 - `config_flow.py`: Handles HA configuration flow.
+- `switch.py`: Per-camera recording control. Restores state before starting snapshots.
+  Recording start/stop must remain idempotent; maintenance continues while paused.
 - `const.py`: Constants and default configuration values.
 - `translations/`: Internationalization and configuration labels.
 
@@ -48,7 +50,7 @@ The project follows a service-oriented architecture layout within the component:
 
 ## Verification & Testing
 
-**CRITICAL**: This project has a standalone verification script that mocks Home Assistant.
+**CRITICAL**: This project has a standalone service verification script using real Home Assistant classes.
 
 - **Script**: `tests/verify.py`
 - **Usage**: `python3 tests/verify.py`

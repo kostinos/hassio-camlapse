@@ -11,6 +11,7 @@
 
 ## Features
 
+- **Start / Stop**: Each camera has a recording switch for manual control and automations; its state survives restarts.
 - **Automated Snapshots**: Captures images from any `camera` entity at a configurable interval (default: 60s).
 - **Hourly Timelapses**: Automatically compiles snapshots into an MP4 video at the end of every hour.
 - **Daily Merging**: Optionally merges hourly videos into a single daily timelapse file to reduce clutter.
@@ -26,9 +27,8 @@ Newer Home Assistant versions are not yet covered by the test matrix. CI checks 
 types, configuration flows and service behavior. A real camera / HAOS installation
 is still needed to verify end-to-end recording in your environment.
 
-Version **0.1.1** adds bounded numeric settings, server-side validation, duplicate-camera
-checks (including entries created by the original integration), and safe camera changes
-when reconfiguring. See [CHANGELOG.md](CHANGELOG.md).
+Version **0.2.0** adds a recording switch for each camera. Numeric validation and
+duplicate-camera protection from 0.1.1 remain included. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Installation
 
@@ -92,6 +92,42 @@ duplicate checks; reconfiguring them also saves the camera identity.
 | **Snapshot Retention** | Number of days to keep raw images (1–3650).                        | `7`                |
 | **Video Retention**    | Number of days to keep video files (1–3650).                       | `30`               |
 | **Videos Per Day**     | `1` merges daily; `2`–`24` keep hourly videos (not an exact count).      | `1`                |
+
+## Start and stop recording
+
+Each configured camera exposes a **CamLapse recording** switch in Home Assistant.
+Find it under **Settings > Devices & Services > Hassio CamLapse > Entities** and
+add it to a dashboard, or target it from an automation with `switch.turn_on` /
+`switch.turn_off`. Each switch controls only its own camera; it does not turn off
+the camera itself.
+
+- **On**: take snapshots at the configured interval. The first snapshot is taken
+  after one interval, not immediately.
+- **Off**: stop scheduling new snapshots. An already-running snapshot may finish.
+- The last on/off state is restored after a restart or reconfiguration. New entries
+  and entries upgraded from 0.1.x start **on**, preserving the previous behavior.
+  Turn the switch off once if you want recording only on request.
+- Previously captured images are still processed by hourly maintenance, and normal
+  retention cleanup continues while recording is off. Stopping does not immediately
+  finalize a video, delete recordings, or create a separate clip for each session.
+
+Example actions (replace the example entity ID with the switch's actual entity ID):
+
+```yaml
+# Start recording from an automation or Developer Tools > Actions.
+action: switch.turn_on
+target:
+  entity_id: switch.camera_garden_camlapse_recording
+```
+
+```yaml
+# Stop recording.
+action: switch.turn_off
+target:
+  entity_id: switch.camera_garden_camlapse_recording
+```
+
+No removal or reinstallation of the integration is needed to pause recording.
 
 ## How It Works
 
