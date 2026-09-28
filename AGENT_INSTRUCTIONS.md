@@ -53,10 +53,11 @@ The project follows a service-oriented architecture layout within the component:
 - **Script**: `tests/verify.py`
 - **Usage**: `python3 tests/verify.py`
 - **Behavior**:
-  - Mocks `homeassistant` modules.
+  - Uses real Home Assistant classes; mocks camera input and FFmpeg subprocesses.
   - Verifies folder structure creation.
   - Verifies FFmpeg command generation (does not actual run ffmpeg, mocks subprocess).
-  - Verifies Logic (gap filling, merging, codec selection).
+  - Verifies logic (gap filling, merging, codec selection).
+- **Config tests**: `python -m pytest tests/test_config_flow.py` covers numeric validation, UI schema serialization, legacy entries and camera changes.
 - **Rule**: ALWAYS run `tests/verify.py` after modifying logic strings or service interactions.
 
 ## Key Files

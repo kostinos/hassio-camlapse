@@ -1,4 +1,11 @@
-# Hassio CamLapse
+# Hassio CamLapse — maintained fork
+
+> **This is the independently maintained fork by [kostinos](https://github.com/kostinos).**
+> Based on [tolwi/hassio-camlapse](https://github.com/tolwi/hassio-camlapse), originally created by **tolwi**.
+> Report bugs and request features in [this fork's issue tracker](https://github.com/kostinos/hassio-camlapse/issues).
+> Releases and support for this fork are managed independently from the original project.
+
+[![CI](https://github.com/kostinos/hassio-camlapse/actions/workflows/lint.yaml/badge.svg)](https://github.com/kostinos/hassio-camlapse/actions/workflows/lint.yaml)
 
 **Hassio CamLapse** is a Home Assistant custom component designed to automatically generate timelapse videos from your camera entities. Ideally suited for long-term monitoring, it captures snapshots at regular intervals, compiles them into hourly videos, and optionally merges them into daily summaries.
 
@@ -12,17 +19,28 @@
 - **High Efficiency**: Supports **H.264 (AVC)** and **H.265 (HEVC)** codecs for optimized file sizes.
 - **Customizable**: Adjustable frame rates (FPS) and output paths.
 
+## Supported version and maintenance
+
+The tested baseline for this fork is **Home Assistant 2025.12.5 / Python 3.13**.
+Newer Home Assistant versions are not yet covered by the test matrix. CI checks lint,
+types, configuration flows and service behavior. A real camera / HAOS installation
+is still needed to verify end-to-end recording in your environment.
+
+Version **0.1.1** adds bounded numeric settings, server-side validation, duplicate-camera
+checks (including entries created by the original integration), and safe camera changes
+when reconfiguring. See [CHANGELOG.md](CHANGELOG.md).
+
 ## Installation
 
 ### Option 1: HACS (Recommended)
 
 1.  Open HACS in Home Assistant.
 2.  Go to **Integrations** > **Triple dots** (top right) > **Custom repositories**.
-3.  Paste the repository URL: `https://github.com/tolwi/hassio-camlapse` into the **Repository** field.
+3.  Paste the repository URL: `https://github.com/kostinos/hassio-camlapse` into the **Repository** field.
 4.  Select **Integration** as the **Category**.
 5.  Click **Add**.
 6.  Close the custom repositories dialog.
-7.  Search for **Hassio CamLapse** and click **Download**.
+7.  Search for **Hassio CamLapse (kostinos fork)** and click **Download**.
 8.  Restart Home Assistant.
 
 ### Option 2: Manual Installation
@@ -30,6 +48,27 @@
 1.  Download the `custom_components/hassio_camlapse` folder from this repository.
 2.  Copy the folder into your Home Assistant's `config/custom_components/` directory.
 3.  Restart Home Assistant.
+
+## Switching from the original integration
+
+This fork uses the same domain, `hassio_camlapse`, configuration keys and storage layout.
+It replaces the original integration; **do not install both side by side**.
+
+1. Back up Home Assistant configuration and your snapshots/videos.
+2. Note the configured camera and storage paths. **Keep the entries under Settings > Devices & Services**;
+   deleting those entries is not part of the migration.
+3. In HACS, remove the original repository/download, then add
+   `https://github.com/kostinos/hassio-camlapse` as a custom **Integration** repository and download this fork.
+   Complete the replacement before restarting Home Assistant. For manual installations,
+   replace only `config/custom_components/hassio_camlapse` with the folder from this fork.
+4. Restart Home Assistant and check the existing CamLapse entries and logs.
+5. If an old entry has invalid numeric settings (such as FPS = 0), use **Reconfigure**
+   to correct them. Invalid values are reported rather than silently changed.
+
+Existing duplicate entries are not deleted automatically. Keep one entry per camera;
+reconfigure or remove extra entries deliberately. Changing the camera does not move or
+rename previously recorded files. Old entries without a `unique_id` are included in
+duplicate checks; reconfiguring them also saves the camera identity.
 
 ## Configuration
 
@@ -45,14 +84,14 @@
 | Option                 | Description                                               | Default            |
 | :--------------------- | :-------------------------------------------------------- | :----------------- |
 | **Camera Entity**      | The camera entity id to capture snapshots from.           | Required           |
-| **Interval**           | Time in seconds between snapshots.                        | `60`               |
+| **Interval**           | Time in seconds between snapshots (1–3600).                        | `60`               |
 | **Snapshot Path**      | Base path. Files saved in `<path>/<camera_id>/snapshots`. | `/media/timelapse` |
 | **Video Path**         | Base path. Files saved in `<path>/<camera_id>/videos`.    | `/media/timelapse` |
-| **Output FPS**         | Frames per second for the output video.                   | `10`               |
+| **Output FPS**         | Frames per second for the output video (1–60).                   | `10`               |
 | **Codec**              | Video codec to use (`libx264` or `libx265`).              | `H.264 (AVC)`      |
-| **Snapshot Retention** | Number of days to keep raw images.                        | `7`                |
-| **Video Retention**    | Number of days to keep video files.                       | `30`               |
-| **Videos Per Day**     | Set to `1` to merge hourly videos into a daily file.      | `1`                |
+| **Snapshot Retention** | Number of days to keep raw images (1–3650).                        | `7`                |
+| **Video Retention**    | Number of days to keep video files (1–3650).                       | `30`               |
+| **Videos Per Day**     | `1` merges daily; `2`–`24` keep hourly videos (not an exact count).      | `1`                |
 
 ## How It Works
 
@@ -67,3 +106,24 @@
 - **Videos not generating**: Ensure `ffmpeg` is installed and accessible in your Home Assistant environment (standard in HAOS/Supervised).
 - **Permissions**: Ensure the `Snapshot Path` and `Video Path` are writable by Home Assistant.
 - **Logs**: Check **Settings** > **System** > **Logs** for entries involved with `hassio_camlapse` for error details.
+
+## Development
+
+```sh
+python3.13 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+ruff check custom_components tests
+mypy custom_components
+python -m pytest
+python tests/verify.py
+```
+
+With mise, use `mise run lint` and `mise run test`. Tests mock camera input and
+FFmpeg execution; they do not require a physical camera or modify a Home Assistant installation.
+
+## Credits and license
+
+Original integration by [tolwi](https://github.com/tolwi). Fork maintained by
+[kostinos](https://github.com/kostinos). Licensed under [Apache License 2.0](LICENSE);
+the original license and attribution are retained.

@@ -1,6 +1,6 @@
 {
-  "name": "Hassio CamLapse",
+  "name": "Hassio CamLapse (kostinos fork)",
   "render_readme": true,
-  "homeassistant": "2024.8.0",
+  "homeassistant": "2025.12.5",
   "hide_default_branch": true
 }
