@@ -1,13 +1,13 @@
 # Hassio CamLapse — maintained fork
 
-> **This is the independently maintained fork by [kostinos](https://github.com/kostinos).**
-> Based on [tolwi/hassio-camlapse](https://github.com/tolwi/hassio-camlapse), originally created by **tolwi**.
-> Report bugs and request features in [this fork's issue tracker](https://github.com/kostinos/hassio-camlapse/issues).
-> Releases and support for this fork are managed independently from the original project.
+Maintained by [kostinos](https://github.com/kostinos), based on
+[tolwi/hassio-camlapse](https://github.com/tolwi/hassio-camlapse).
+Please report bugs in [this repository](https://github.com/kostinos/hassio-camlapse/issues).
 
 [![CI](https://github.com/kostinos/hassio-camlapse/actions/workflows/lint.yaml/badge.svg)](https://github.com/kostinos/hassio-camlapse/actions/workflows/lint.yaml)
 
-**Hassio CamLapse** is a Home Assistant custom component designed to automatically generate timelapse videos from your camera entities. Ideally suited for long-term monitoring, it captures snapshots at regular intervals, compiles them into hourly videos, and optionally merges them into daily summaries.
+A Home Assistant integration that takes camera snapshots at regular intervals and
+turns them into hourly or daily timelapse videos.
 
 ## Features
 
@@ -22,10 +22,9 @@
 
 ## Supported version and maintenance
 
-The tested baseline for this fork is **Home Assistant 2025.12.5 / Python 3.13**.
-Newer Home Assistant versions are not yet covered by the test matrix. CI checks lint,
-types, configuration flows and service behavior. A real camera / HAOS installation
-is still needed to verify end-to-end recording in your environment.
+Tested with **Home Assistant 2025.12.5 / Python 3.13**. CI runs lint, type checks
+and regression tests. Tests use mocked camera input and FFmpeg; newer HA versions
+and recording on a real camera have not been checked yet.
 
 Version **0.2.0** adds a recording switch for each camera. Numeric validation and
 duplicate-camera protection from 0.1.1 remain included. See [CHANGELOG.md](CHANGELOG.md).
