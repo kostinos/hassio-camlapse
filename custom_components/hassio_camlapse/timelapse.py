@@ -41,6 +41,7 @@ class TimelapseManager:
         self.output_codec = config.get("output_codec", DEFAULT_OUTPUT_CODEC)
 
         self._remove_timer: Optional[CALLBACK_TYPE] = None
+        self._timer_generation = 0
 
         # Initialize Services
         self.snapshot_service = SnapshotService(hass, self.camera_entity_id, self.snapshot_path, self.camera_id)
@@ -68,9 +69,15 @@ class TimelapseManager:
         """Start the periodic snapshot task once, even after repeated service calls."""
         if self.is_recording:
             return
+        self._timer_generation += 1
+        generation = self._timer_generation
+
+        async def snapshot_tick(now: datetime.datetime) -> None:
+            await self._async_take_snapshot_wrapper(now, generation)
+
         self._remove_timer = async_track_time_interval(
             self.hass,
-            self._async_take_snapshot_wrapper,
+            snapshot_tick,
             datetime.timedelta(seconds=self.interval),
         )
         _LOGGER.info(f"Started timelapse snapshots for {self.camera_entity_id} every {self.interval}s")
@@ -82,9 +89,9 @@ class TimelapseManager:
             self._remove_timer = None
             _LOGGER.info("Stopped timelapse snapshots")
 
-    async def _async_take_snapshot_wrapper(self, now: datetime.datetime) -> None:
-        """Ignore timer callbacks that were queued before the switch was turned off."""
-        if self.is_recording:
+    async def _async_take_snapshot_wrapper(self, now: datetime.datetime, generation: int) -> None:
+        """Ignore callbacks from a stopped or replaced snapshot timer."""
+        if self.is_recording and generation == self._timer_generation:
             await self.async_take_snapshot()
 
     async def async_take_snapshot(self):

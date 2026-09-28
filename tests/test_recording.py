@@ -41,10 +41,10 @@ async def test_repeated_start_stop_does_not_duplicate_timers(manager, timer):
 async def test_queued_snapshot_is_skipped_after_stop(manager, timer):
     with patch.object(manager.snapshot_service, "async_take_snapshot", new_callable=AsyncMock) as take:
         await manager.start()
-        await manager._async_take_snapshot_wrapper(datetime.now(timezone.utc))
+        await timer.call_args.args[1](datetime.now(timezone.utc))
         take.assert_awaited_once()
         await manager.stop()
-        await manager._async_take_snapshot_wrapper(datetime.now(timezone.utc))
+        await timer.call_args.args[1](datetime.now(timezone.utc))
         take.assert_awaited_once()
 
 
@@ -145,3 +145,17 @@ async def test_paused_camera_still_processes_backlog_and_retention(manager):
         await manager.cleanup_old_files()
     backlog.assert_awaited_once_with(manager.video_retention_days)
     cleanup.assert_awaited_once()
+
+
+async def test_old_timer_cannot_capture_after_rapid_restart(manager, timer):
+    with patch.object(manager.snapshot_service, "async_take_snapshot", new_callable=AsyncMock) as take:
+        await manager.start()
+        old_callback = timer.call_args.args[1]
+        await manager.stop()
+        await manager.start()
+        new_callback = timer.call_args.args[1]
+        await old_callback(datetime.now(timezone.utc))
+        take.assert_not_awaited()
+        await new_callback(datetime.now(timezone.utc))
+        take.assert_awaited_once()
+        await manager.stop()
