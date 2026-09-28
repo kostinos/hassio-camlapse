@@ -1,4 +1,9 @@
-homeassistant>=2024.5.5
-
-ruff>=0.14.10
-mypy>=1.19.1
+homeassistant==2025.12.5
+ruff==0.14.10
+mypy==1.19.1
+pytest==8.4.2
+pytest-asyncio==1.3.0
+# Camera/stream dependencies used when importing the real HA camera component in tests.
+PyTurboJPEG==1.8.0
+av==16.0.1
+numpy==2.3.2

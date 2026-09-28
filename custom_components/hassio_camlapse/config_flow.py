@@ -1,131 +1,106 @@
-"""Config flow for Hassio Timelapse integration."""
+"""Config flow for Hassio CamLapse."""
 
 from __future__ import annotations
 
-import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
-
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers import selector
 
 from .const import (
     DOMAIN,
     CONF_CAMERA_ENTITY_ID,
-    CONF_INTERVAL_SECONDS,
     CONF_SNAPSHOT_PATH,
     CONF_VIDEO_PATH,
-    CONF_OUTPUT_FPS,
-    CONF_IMAGE_RETENTION_DAYS,
-    CONF_VIDEO_RETENTION_DAYS,
-    CONF_VIDEOS_PER_DAY,
-    DEFAULT_INTERVAL_SECONDS,
+    CONF_OUTPUT_CODEC,
     DEFAULT_SNAPSHOT_PATH,
     DEFAULT_VIDEO_PATH,
-    DEFAULT_OUTPUT_FPS,
-    DEFAULT_IMAGE_RETENTION_DAYS,
-    DEFAULT_VIDEO_RETENTION_DAYS,
-    DEFAULT_VIDEOS_PER_DAY,
     DEFAULT_OUTPUT_CODEC,
-    CONF_OUTPUT_CODEC,
 )
+from .validation import NUMERIC_FIELDS, validate_numeric_config
 
-_LOGGER = logging.getLogger(__name__)
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_CAMERA_ENTITY_ID): selector.EntitySelector(selector.EntitySelectorConfig(domain="camera")),
-        vol.Required(CONF_INTERVAL_SECONDS, default=DEFAULT_INTERVAL_SECONDS): int,
-        vol.Required(CONF_SNAPSHOT_PATH, default=DEFAULT_SNAPSHOT_PATH): cv.string,
-        vol.Required(CONF_VIDEO_PATH, default=DEFAULT_VIDEO_PATH): cv.string,
-        vol.Required(CONF_OUTPUT_FPS, default=DEFAULT_OUTPUT_FPS): int,
-        vol.Required(CONF_IMAGE_RETENTION_DAYS, default=DEFAULT_IMAGE_RETENTION_DAYS): int,
-        vol.Required(CONF_VIDEO_RETENTION_DAYS, default=DEFAULT_VIDEO_RETENTION_DAYS): int,
-        vol.Required(CONF_VIDEOS_PER_DAY, default=DEFAULT_VIDEOS_PER_DAY): int,
-        vol.Required(CONF_OUTPUT_CODEC, default=DEFAULT_OUTPUT_CODEC): selector.SelectSelector(
+def _schema(defaults: Mapping[str, Any]) -> vol.Schema:
+    """Keep selectors directly in the schema so HA can serialize the form."""
+    fields: dict[Any, Any] = {
+        vol.Required(
+            CONF_CAMERA_ENTITY_ID, default=defaults.get(CONF_CAMERA_ENTITY_ID, vol.UNDEFINED)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain="camera")),
+        vol.Required(CONF_SNAPSHOT_PATH, default=defaults.get(CONF_SNAPSHOT_PATH, DEFAULT_SNAPSHOT_PATH)): cv.string,
+        vol.Required(CONF_VIDEO_PATH, default=defaults.get(CONF_VIDEO_PATH, DEFAULT_VIDEO_PATH)): cv.string,
+    }
+    for key, (minimum, maximum, default, unit) in NUMERIC_FIELDS.items():
+        number_config = selector.NumberSelectorConfig(
+            min=minimum, max=maximum, step=1, mode=selector.NumberSelectorMode.BOX
+        )
+        if unit is not None:
+            number_config["unit_of_measurement"] = unit
+        fields[vol.Required(key, default=defaults.get(key, default))] = selector.NumberSelector(number_config)
+    fields[vol.Required(CONF_OUTPUT_CODEC, default=defaults.get(CONF_OUTPUT_CODEC, DEFAULT_OUTPUT_CODEC))] = (
+        selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=["libx264", "libx265"],
                 mode=selector.SelectSelectorMode.DROPDOWN,
                 translation_key="output_codec",
             )
-        ),
-    }
-)
+        )
+    )
+    return vol.Schema(fields)
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Hassio Timelapse."""
+    """Configure one timelapse entry per camera, including legacy entries."""
 
     VERSION = 1
+
+    def _camera_configured(self, camera: str, *, exclude_entry_id: str | None = None) -> bool:
+        return any(
+            entry.entry_id != exclude_entry_id
+            and (entry.data.get(CONF_CAMERA_ENTITY_ID) == camera or entry.unique_id == camera)
+            for entry in self._async_current_entries()
+        )
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title=user_input[CONF_CAMERA_ENTITY_ID], data=user_input)
+            try:
+                data = validate_numeric_config(user_input)
+            except vol.Invalid as err:
+                errors[str(err.path[0])] = "invalid_number"
+            else:
+                camera = data[CONF_CAMERA_ENTITY_ID]
+                if self._camera_configured(camera):
+                    return self.async_abort(reason="already_configured")
+                await self.async_set_unique_id(camera)
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title=camera, data=data)
 
-        return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors)
+        return self.async_show_form(step_id="user", data_schema=_schema(user_input or {}), errors=errors)
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle reconfiguration."""
+        """Validate changes before updating the camera identity and data together."""
         errors: dict[str, str] = {}
-
-        # Get current config
-        if not (config_entry := self.hass.config_entries.async_get_entry(self.context["entry_id"])):
+        if not (entry := self.hass.config_entries.async_get_entry(self.context["entry_id"])):
             return self.async_abort(reason="existing_entry_not_found")
 
         if user_input is not None:
-            # Update config entry with new data
-            return self.async_update_reload_and_abort(config_entry, data={**config_entry.data, **user_input})
-
-        # Prepare form with current values as defaults
-        current_config = config_entry.data
-
-        # Fallback to base_path or defaults if new paths are missing (migration scenario handled in init, but good for UI)
-        default_snapshot = current_config.get(CONF_SNAPSHOT_PATH, DEFAULT_SNAPSHOT_PATH)
-
-        default_video = current_config.get(CONF_VIDEO_PATH, DEFAULT_VIDEO_PATH)
-
-        data_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_CAMERA_ENTITY_ID, default=current_config.get(CONF_CAMERA_ENTITY_ID)
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="camera")),
-                vol.Required(CONF_INTERVAL_SECONDS, default=current_config.get(CONF_INTERVAL_SECONDS)): int,
-                vol.Required(CONF_SNAPSHOT_PATH, default=default_snapshot): cv.string,
-                vol.Required(CONF_VIDEO_PATH, default=default_video): cv.string,
-                vol.Required(CONF_OUTPUT_FPS, default=current_config.get(CONF_OUTPUT_FPS)): int,
-                vol.Required(
-                    CONF_IMAGE_RETENTION_DAYS,
-                    default=current_config.get(CONF_IMAGE_RETENTION_DAYS, DEFAULT_IMAGE_RETENTION_DAYS),
-                ): int,
-                vol.Required(
-                    CONF_VIDEO_RETENTION_DAYS,
-                    default=current_config.get(CONF_VIDEO_RETENTION_DAYS, DEFAULT_VIDEO_RETENTION_DAYS),
-                ): int,
-                vol.Required(
-                    CONF_VIDEOS_PER_DAY,
-                    default=current_config.get(CONF_VIDEOS_PER_DAY, DEFAULT_VIDEOS_PER_DAY),
-                ): int,
-                vol.Required(
-                    CONF_OUTPUT_CODEC,
-                    default=current_config.get(CONF_OUTPUT_CODEC, DEFAULT_OUTPUT_CODEC),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=["libx264", "libx265"],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                        translation_key="output_codec",
-                    )
-                ),
-            }
-        )
+            try:
+                data = validate_numeric_config({**entry.data, **user_input})
+            except vol.Invalid as err:
+                errors[str(err.path[0])] = "invalid_number"
+            else:
+                camera = data[CONF_CAMERA_ENTITY_ID]
+                if self._camera_configured(camera, exclude_entry_id=entry.entry_id):
+                    errors[CONF_CAMERA_ENTITY_ID] = "already_configured"
+                else:
+                    return self.async_update_reload_and_abort(entry, data=data, unique_id=camera, title=camera)
 
         return self.async_show_form(
-            step_id="reconfigure",
-            data_schema=data_schema,
-            errors=errors,
+            step_id="reconfigure", data_schema=_schema({**entry.data, **(user_input or {})}), errors=errors
         )

@@ -6,8 +6,11 @@ python = "3.13"
 
 [tasks.lint]
 description = "Lint code"
-dir = "custom_components"
 run = """
-ruff check .
-mypy .
+ruff check custom_components tests
+mypy custom_components
 """
+
+[tasks.test]
+description = "Run regression tests"
+run = "python -m pytest"

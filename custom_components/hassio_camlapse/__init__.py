@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import logging
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
 
 from .const import DOMAIN
 from .timelapse import TimelapseManager
+from .validation import validate_numeric_config
 import datetime
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,7 +27,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
 
-    manager = TimelapseManager(hass, entry.data)
+    try:
+        config = validate_numeric_config(entry.data)
+    except vol.Invalid as err:
+        raise ConfigEntryError(f"Invalid {err.path[0]}: {err.msg}. Reconfigure this CamLapse entry.") from err
+
+    manager = TimelapseManager(hass, config)
     hass.data[DOMAIN][entry.entry_id] = manager
 
     await manager.start()
